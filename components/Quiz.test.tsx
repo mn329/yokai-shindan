@@ -1,4 +1,5 @@
 import { fireEvent, render, screen } from '@testing-library/react'
+import { Activity } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Question, YokaiId } from '@/lib/yokai/types'
 import { Quiz } from './Quiz'
@@ -73,5 +74,52 @@ describe('Quiz', () => {
     expect(push).toHaveBeenCalledWith('/result/kappa')
     expect(screen.queryByRole('button', { name: 'A2' })).toBeNull()
     expect(screen.getByRole('status').textContent).toBe('結果を表示しています…')
+  })
+
+  it('全問回答後に画面が隠れて再表示されたら、1 問目からやり直せる', () => {
+    // cacheComponents ではページ遷移で Activity に隠され、state が保持される
+    const { rerender } = render(
+      <Activity mode="visible">
+        <Quiz questions={questions} yokaiOrder={order} />
+      </Activity>,
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'A1' }))
+    fireEvent.click(screen.getByRole('button', { name: 'A2' }))
+
+    rerender(
+      <Activity mode="hidden">
+        <Quiz questions={questions} yokaiOrder={order} />
+      </Activity>,
+    )
+    rerender(
+      <Activity mode="visible">
+        <Quiz questions={questions} yokaiOrder={order} />
+      </Activity>,
+    )
+
+    expect(screen.getByRole('heading', { name: '質問その1' })).toBeDefined()
+    expect(screen.getByText('1 / 2')).toBeDefined()
+  })
+
+  it('回答途中で画面が隠れて再表示されたら、途中から続けられる', () => {
+    const { rerender } = render(
+      <Activity mode="visible">
+        <Quiz questions={questions} yokaiOrder={order} />
+      </Activity>,
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'A1' }))
+
+    rerender(
+      <Activity mode="hidden">
+        <Quiz questions={questions} yokaiOrder={order} />
+      </Activity>,
+    )
+    rerender(
+      <Activity mode="visible">
+        <Quiz questions={questions} yokaiOrder={order} />
+      </Activity>,
+    )
+
+    expect(screen.getByRole('heading', { name: '質問その2' })).toBeDefined()
   })
 })

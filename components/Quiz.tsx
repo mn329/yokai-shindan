@@ -1,7 +1,7 @@
 'use client'
 
 import { useRouter } from 'next/navigation'
-import { useState } from 'react'
+import { useLayoutEffect, useRef, useState } from 'react'
 import { diagnose } from '@/lib/yokai/diagnose'
 import type { Answers, Question, YokaiId } from '@/lib/yokai/types'
 
@@ -13,6 +13,18 @@ type Props = {
 export function Quiz({ questions, yokaiOrder }: Props) {
   const router = useRouter()
   const [answers, setAnswers] = useState<Answers>([])
+  const shouldReset = useRef(false)
+
+  // cacheComponents ではページ遷移で Activity に隠され state が残るため、
+  // 全問回答済みのまま隠れたらリセットし、戻ってきたときに 1 問目から始める
+  useLayoutEffect(() => {
+    return () => {
+      if (shouldReset.current) {
+        shouldReset.current = false
+        setAnswers([])
+      }
+    }
+  }, [])
 
   // 全問回答済み。選択肢を消して二重遷移を防ぐ
   if (answers.length === questions.length) {
@@ -30,6 +42,7 @@ export function Quiz({ questions, yokaiOrder }: Props) {
     const next = [...answers, choiceIndex]
     setAnswers(next)
     if (next.length === questions.length) {
+      shouldReset.current = true
       router.push(`/result/${diagnose(questions, next, yokaiOrder)}`)
     }
   }
