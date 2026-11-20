@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
-import Link from 'next/link'
 import { notFound } from 'next/navigation'
+import { ShareButtons } from '@/components/ShareButtons'
+import { SITE_URL } from '@/lib/site'
 import { YOKAI, getYokai } from '@/lib/yokai/yokai'
 
 type Props = {
@@ -36,9 +37,7 @@ export default async function ResultPage({ params }: Props) {
       <h1 className="text-4xl font-bold">{yokai.name}</h1>
       <p className="text-lg font-semibold">「{yokai.catchphrase}」</p>
       <p className="leading-8 text-zinc-700 dark:text-zinc-300">{yokai.description}</p>
-      <Link href="/quiz" className="underline">
-        もう一度診断する
-      </Link>
+      <ShareButtons yokai={yokai} siteUrl={SITE_URL} />
     </main>
   )
 }
