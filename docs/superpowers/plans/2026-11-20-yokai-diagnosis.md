@@ -569,6 +569,7 @@ git commit -m "feat: 妖怪 6 匹と質問 7 問のデータを追加"
 - Create: `lib/site.ts`
 - Create: `app/result/[yokaiId]/page.tsx`
 - Create: `app/result/[yokaiId]/opengraph-image.tsx`（この時点では日本語を含まない仮の画像）
+- Create: `proxy.ts`、Test: `proxy.test.ts`（判断ゲートの結果を受けて追加。下記「実施時の追記」参照）
 
 **Interfaces:**
 - Consumes: `YOKAI`、`getYokai`（Task 2）
@@ -725,10 +726,12 @@ Step 4 または Step 6 の結果が Expected と一つでも違った場合（�
 
 すべて Expected どおりなら次へ進む。
 
+**実施時の追記（2026-11-20）:** Step 6 で `/result/foo` が 200 + noindex になり判断ゲートに該当した（`partialPrefetching` によりページの外枠が先に送られるため）。ユーザーと相談のうえ、`proxy.ts` で未定義 ID を `/404` へ rewrite する方式を採用し、`proxy.test.ts`（3 件）を TDD で追加。再ビルド後、`/result/foo` と `/result/foo/opengraph-image` が 404、既知 ID が 200 になることを確認した。以降のタスクのテスト件数は proxy の 3 件を加えて数える。
+
 - [ ] **Step 9: コミット**
 
 ```bash
-git add lib/site.ts "app/result/[yokaiId]/page.tsx" "app/result/[yokaiId]/opengraph-image.tsx"
+git add proxy.ts proxy.test.ts lib/site.ts "app/result/[yokaiId]/page.tsx" "app/result/[yokaiId]/opengraph-image.tsx"
 git commit -m "feat: 結果ページと OGP 画像の骨組みを追加（6 匹分を静的生成、未定義 ID は 404）"
 ```
 

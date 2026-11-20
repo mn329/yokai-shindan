@@ -68,7 +68,9 @@ TypeSafe AI の **Jev**（テキスト分類モデル）を使った自由記述
 - 結果 URL には回答を含めず、妖怪 ID だけにする。どの回答経路でも同じ妖怪なら同じ URL・同じ OGP 画像になり、そのままシェアできる。
 - 結果ページは `generateStaticParams` で 6 匹分を静的生成する。未定義の ID は `notFound()` で 404 にする。
 - 動的ルートの `params` は Next.js 16 では `Promise` なので `await params` で受け取る。
-- `next.config.ts` で `cacheComponents: true` が有効なため、`dynamicParams` は使えない（ビルドエラーになる）。未定義 ID は `notFound()` で拒否する。`notFound()` は Suspense の内側で呼ぶと 404 ではなく 200 + noindex になるので、`params` の読み取りと `notFound()` は Suspense の外で行う。この構成がビルドを通るかは実装の早い段階で本番ビルドして確認する。
+- `next.config.ts` で `cacheComponents: true` が有効なため、`dynamicParams` は使えない（ビルドエラーになる）。未定義 ID は次の 2 段で拒否する。
+  - **`proxy.ts`（主）**: `/result/:path+` へのリクエストで妖怪 ID を確認し、未定義なら存在しないパス `/404` へ rewrite する。Next.js の通常の 404 ページが HTTP 404 で返る。`partialPrefetching: true` ではページの外枠が先に送られるため、ページ内の `notFound()` だけでは 404 ページは表示されても HTTP ステータスが 200（+ noindex）になることを本番ビルドで確認したため。
+  - **ページ内の `notFound()`（保険）**: proxy の matcher が外れた場合でも 404 ページを表示する。
 - 質問画面では「前の問題に戻る」ボタンを付ける（回答配列の末尾を取り除く）。
 
 ## 5. データ構造
@@ -198,6 +200,8 @@ export function buildShareUrl(yokai: Yokai, siteUrl: string): string
 ## 8. ファイル構成
 
 ```
+proxy.ts                      # 未定義の妖怪 ID を 404 にする
+proxy.test.ts
 app/
   layout.tsx                  # metadataBase 追加、lang="ja"
   page.tsx                    # トップ（作り直し）
@@ -253,6 +257,7 @@ Next.js 公式ガイド（`node_modules/next/dist/docs/01-app/02-guides/testing/
 | 妖怪・質問データ | 単体テスト | `points` の ID がすべて定義済み、各質問の選択肢が 2 個以上、6 匹すべてに結果として出る回答パターンが存在する |
 | `buildShareUrl` | 単体テスト（TDD） | 日本語とハッシュタグのエンコード、結果 URL を含む |
 | `Quiz` | React Testing Library | 選択で次の問題へ進む、戻るボタン、最終回答後に `router.push('/result/<id>')` が呼ばれる（`next/navigation` はモック） |
+| `proxy` | 単体テスト（`next/experimental/testing/server`） | matcher が `/result/*` だけに当たる、定義済み ID は通す、未定義 ID は `/404` へ rewrite |
 | OGP の文言とフォント | 単体テスト | OGP に描く全文字が `assets/og/chars.txt` に含まれる（含まれない文字は豆腐になる） |
 | 結果ページ・OGP 画像 | `npm run build` と本番サーバーへの `curl`、手動確認 | async Server Component は Vitest で扱えないため。ビルドで 6 ページ分が生成されること、`/result/foo` の HTTP ステータスが 404 であること、OGP 画像 6 枚の見た目を確認 |
 
@@ -260,6 +265,6 @@ Next.js 公式ガイド（`node_modules/next/dist/docs/01-app/02-guides/testing/
 
 ## 10. エラー処理
 
-- 未定義の妖怪 ID で結果ページにアクセス → `notFound()`（404）
+- 未定義の妖怪 ID で結果ページ・OGP 画像にアクセス → `proxy.ts` が `/404` へ rewrite し HTTP 404
 - `diagnose` への不正入力 → `Error`。UI からは常に正しい形で呼ぶので、通常は起きない
 - クリップボード API の失敗 → 失敗メッセージを表示
