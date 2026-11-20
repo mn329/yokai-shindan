@@ -1503,8 +1503,8 @@ Expected: 成功。ルート一覧に `/`、`/quiz`、`/result/[yokaiId]`（6 �
 npx next start -p 3100 > .next/start.log 2>&1 &
 echo $! > .next/start.pid
 for i in $(seq 1 30); do curl -s -o /dev/null http://localhost:3100/ && break; sleep 1; done
-for path in / /quiz /result/kappa /result/foo /result/kappa/opengraph-image; do
-  curl -s -o /dev/null -w "$path: %{http_code}\n" "http://localhost:3100$path"
+for p in / /quiz /result/kappa /result/foo /result/kappa/opengraph-image; do
+  curl -s -o /dev/null -w "$p: %{http_code}\n" "http://localhost:3100$p"
 done
 kill "$(cat .next/start.pid)"
 ```

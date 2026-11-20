@@ -71,6 +71,7 @@ TypeSafe AI の **Jev**（テキスト分類モデル）を使った自由記述
 - `next.config.ts` で `cacheComponents: true` が有効なため、`dynamicParams` は使えない（ビルドエラーになる）。未定義 ID は次の 2 段で拒否する。
   - **`proxy.ts`（主）**: `/result/:path+` へのリクエストで妖怪 ID を確認し、未定義なら存在しないパス `/404` へ rewrite する。Next.js の通常の 404 ページが HTTP 404 で返る。`partialPrefetching: true` ではページの外枠が先に送られるため、ページ内の `notFound()` だけでは 404 ページは表示されても HTTP ステータスが 200（+ noindex）になることを本番ビルドで確認したため。
   - **ページ内の `notFound()`（保険）**: proxy の matcher が外れた場合でも 404 ページを表示する。
+- 結果ページは `params` を Suspense の外で読むので、`export const instant = false` を指定して「このルートへの遷移はサーバーの応答を待つ」ことを明示する（開発時の instant navigation 検証の指摘への対応。6 匹分は静的生成済みなので待ち時間は短い）。
 - 質問画面では「前の問題に戻る」ボタンを付ける（回答配列の末尾を取り除く）。
 
 ## 5. データ構造

@@ -8,6 +8,10 @@ type Props = {
   params: Promise<{ yokaiId: string }>
 }
 
+// params を Suspense の外で読み、未定義 ID ならストリーミング前に notFound() するため、
+// このルートへの遷移はサーバーの応答を待つ（6 匹分は静的生成済みなので待ち時間は短い）
+export const instant = false
+
 export function generateStaticParams() {
   return YOKAI.map((yokai) => ({ yokaiId: yokai.id }))
 }
