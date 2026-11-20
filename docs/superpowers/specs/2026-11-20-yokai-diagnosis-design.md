@@ -68,6 +68,7 @@ TypeSafe AI の **Jev**（テキスト分類モデル）を使った自由記述
 - 結果 URL には回答を含めず、妖怪 ID だけにする。どの回答経路でも同じ妖怪なら同じ URL・同じ OGP 画像になり、そのままシェアできる。
 - 結果ページは `generateStaticParams` で 6 匹分を静的生成する。未定義の ID は `notFound()` で 404 にする。
 - 動的ルートの `params` は Next.js 16 では `Promise` なので `await params` で受け取る。
+- `next.config.ts` で `cacheComponents: true` が有効なため、`dynamicParams` は使えない（ビルドエラーになる）。未定義 ID は `notFound()` で拒否する。`notFound()` は Suspense の内側で呼ぶと 404 ではなく 200 + noindex になるので、`params` の読み取りと `notFound()` は Suspense の外で行う。この構成がビルドを通るかは実装の早い段階で本番ビルドして確認する。
 - 質問画面では「前の問題に戻る」ボタンを付ける（回答配列の末尾を取り除く）。
 
 ## 5. データ構造
@@ -149,6 +150,7 @@ export function diagnose(
 5. 次の場合は `Error` を投げる
    - `answers.length !== questions.length`
    - 選択肢インデックスが範囲外（負数・`choices.length` 以上・非整数）
+   - `yokaiOrder` が空
 
 質問データと妖怪の順序を引数で受け取る純粋関数にする。テストでは小さなダミーデータを渡し、本番データを変更してもテストが壊れないようにする。アプリ側からは `diagnose(QUESTIONS, answers, YOKAI.map(y => y.id))` として呼ぶ。
 
@@ -169,8 +171,10 @@ export function diagnose(
 
 - `app/result/[yokaiId]/opengraph-image.tsx` で `ImageResponse` を使い、1200×630 の画像を生成する。内容は絵文字、妖怪名、キャッチ、サイト名。
 - 絵文字は `ImageResponse` の標準設定（twemoji）で描画する。
-- 日本語フォント（Noto Sans JP）は Google Fonts の `text=` パラメータで、画像に使う文字だけに絞ったものを取得する。`ImageResponse` には 500KB の上限があり、フォント全体は入らないため。取得は静的生成時（ビルド時）に行う。
-  - 代替案: 使う文字だけに絞ったフォントファイルをリポジトリに置き、`readFile` で読む。ビルド時にネットワークに繋がらない場合はこちらに切り替える。
+- 日本語フォント（Noto Sans JP Bold）は、画像に使う文字だけに絞ったサブセットをリポジトリに置き、モジュールのトップレベルで `readFile` して読む（Next.js ドキュメントの方式）。`ImageResponse` には 500KB の上限があり、フォント全体は入らないため。
+  - サブセットは `npm run og:font`（`scripts/fetch-og-font.ts`）で Google Fonts の `text=` パラメータから取得し、`assets/og/NotoSansJP-Bold-subset.ttf` と収録文字の一覧 `assets/og/chars.txt` を保存する。妖怪名・キャッチ・見出しを変えたら再実行する。
+  - ビルド時に OGP 画像内で `fetch` する方式は、`cacheComponents` 下での挙動がドキュメントに記載されていないため採らない。
+  - OGP の文言（見出し・妖怪名・キャッチ・サイト名）は `lib/og.ts` に集め、スクリプト・画像・テストで共有する。
 
 ### シェアボタン
 
@@ -187,7 +191,9 @@ export function diagnose(
 export function buildShareUrl(yokai: Yokai, siteUrl: string): string
 ```
 
-`text` と `url` を `URLSearchParams` でエンコードして X の投稿画面の URL を返す。
+`text` と `url` を `URLSearchParams` でエンコードして X の投稿画面の URL を返す。結果 URL は `buildResultUrl(siteUrl, yokaiId)` で作り、`siteUrl` 末尾のスラッシュを取り除いて `//result/...` にならないようにする。
+
+`Quiz` は `questions: Question[]` と `yokaiOrder: YokaiId[]` を props で受け取る（テストでダミーデータを渡せるようにするため）。最後の回答後は選択肢を消して「結果を表示しています…」を表示し、二重遷移を防ぐ。
 
 ## 8. ファイル構成
 
@@ -211,9 +217,18 @@ lib/
     diagnose.ts
     diagnose.test.ts
     data.test.ts
+  og.ts                       # OGP の文言と使用文字
+  og.test.ts
   share.ts
   share.test.ts
+  site.ts                     # SITE_URL
+scripts/
+  fetch-og-font.ts            # サブセットフォントの取得
+assets/og/
+  NotoSansJP-Bold-subset.ttf
+  chars.txt
 vitest.config.mts
+vitest.setup.ts               # React Testing Library の cleanup
 ```
 
 パスエイリアスは既存の `@/*` → `./*` を使う。
@@ -228,6 +243,8 @@ Next.js 公式ガイド（`node_modules/next/dist/docs/01-app/02-guides/testing/
 
 `package.json` に `"test": "vitest"` を追加する。
 
+フォント取得スクリプトの実行用に `tsx` も dev dependency に入れ、`"og:font": "tsx scripts/fetch-og-font.ts"` を追加する。
+
 ### 対象と方法
 
 | 対象 | 方法 | 確認内容 |
@@ -236,7 +253,8 @@ Next.js 公式ガイド（`node_modules/next/dist/docs/01-app/02-guides/testing/
 | 妖怪・質問データ | 単体テスト | `points` の ID がすべて定義済み、各質問の選択肢が 2 個以上、6 匹すべてに結果として出る回答パターンが存在する |
 | `buildShareUrl` | 単体テスト（TDD） | 日本語とハッシュタグのエンコード、結果 URL を含む |
 | `Quiz` | React Testing Library | 選択で次の問題へ進む、戻るボタン、最終回答後に `router.push('/result/<id>')` が呼ばれる（`next/navigation` はモック） |
-| 結果ページ・OGP 画像 | `npm run build` と手動確認 | async Server Component は Vitest で扱えないため。ビルドで 6 ページ分が生成されること、`/result/kappa/opengraph-image` を開いて見た目を確認 |
+| OGP の文言とフォント | 単体テスト | OGP に描く全文字が `assets/og/chars.txt` に含まれる（含まれない文字は豆腐になる） |
+| 結果ページ・OGP 画像 | `npm run build` と本番サーバーへの `curl`、手動確認 | async Server Component は Vitest で扱えないため。ビルドで 6 ページ分が生成されること、`/result/foo` の HTTP ステータスが 404 であること、OGP 画像 6 枚の見た目を確認 |
 
 「6 匹すべてが結果に出うる」の確認は、質問 7 問・選択肢 3〜4 個なら全回答パターンが最大 4^7 = 16,384 通りなので、全探索で出現する妖怪の集合を求める。
 
